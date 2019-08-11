@@ -61,8 +61,11 @@ class MasterEngine:
         out_dir = re.match("(.*)/(.*).mp4", out_file).group(1)
 
         self._m3u_dict = self._parse_m3u(m3u_url=m3u_url)
-        key_bytes = self._parse_key(prefix=m3u_prefix,
-                                    key_uri=self._m3u_dict.get('enc').get('uri').strip('"'))
+        if self._m3u_dict.get('enc').get('uri'):
+            key_bytes = self._parse_key(prefix=m3u_prefix,
+                                        key_uri=self._m3u_dict.get('enc').get('uri').strip('"'))
+        else:
+            key_bytes = None
         self._check_tools(args=args)
         self._download(prefix=m3u_prefix, out_dir=out_dir)
         self._finish_up(out_dir=out_dir, final_name=out_file, key_bytes=key_bytes)
@@ -74,7 +77,12 @@ class MasterEngine:
         :param m3u_url: the url to the m3u file
         :return: the content of M3U file in a Dictionary
         """
-        m3u_bytes = self._fet_minion.fetch_m3u(m3u_url=m3u_url)
+        m3u_bytes = None
+        if m3u_url[:4] == 'file':
+            with open(m3u_url[7:], 'rb') as m3u_file:
+                m3u_bytes = m3u_file.read()
+        else:
+            m3u_bytes = self._fet_minion.fetch_m3u(m3u_url=m3u_url)
         m3u_dict = self._par_minion.parse_m3u(contents_bytes=m3u_bytes)
         self._encrypted = m3u_dict.get('enc') is not None
 
@@ -127,11 +135,13 @@ class MasterEngine:
         """
         downloaded_files = self._collect_file_names(out_dir=out_dir)
         concatenated_name = self._concatenate(in_names=downloaded_files, final_name=final_name)
-        decrypted_name = self._decrypt(cat_name=concatenated_name,
-                                       key_bytes=key_bytes,
-                                       final_name=final_name)
+        if key_bytes:
+            decrypted_name = self._decrypt(cat_name=concatenated_name,
+                                           key_bytes=key_bytes,
+                                           final_name=final_name)
 
-        self._convert(dec_name=decrypted_name, final_name=final_name)
+        self._convert(dec_name=decrypted_name if key_bytes else concatenated_name,
+                      final_name=final_name)
 
     def _collect_file_names(self, out_dir: str) -> List[str]:
         """
@@ -154,7 +164,7 @@ class MasterEngine:
         :return: the name of the concatenated file
         """
         concatenated_name = '{}_en.ts'.format(final_name[:-4]) if self._encrypted else \
-            '{}'.format(final_name[:-4])
+            '{}.ts'.format(final_name[:-4])
 
         self._alc_minion.concatenate(input_files=in_names, concatenated_name=concatenated_name)
         self._log_minion.debug('File concatenated: {}'.format(concatenated_name))
