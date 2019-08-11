@@ -48,8 +48,10 @@ class Allocator:
         :param input_files: a list of files to concatenate
         :param concatenated_name: the name of the concatenated file
         """
-        if len(input_files) == 1:
+        input_files = [file for file in input_files if file[-3:] == '.ts']
+        if len(input_files) <= 1:
             return
+        input_files.sort(key=len)
         cat_command = [self.cat_tool] + input_files + ['>', concatenated_name]
         os.system(" ".join(cat_command))
 
@@ -62,7 +64,7 @@ class Allocator:
         cov_command = '{tool} -i {in_ts} -codec {codec} {out_mp4} ' \
             .format(tool=self.cov_tool, in_ts=in_ts, codec='copy', out_mp4=out_mp4)
 
-        sp.call(cov_command.split())
+        sp.call(cov_command.split(), stdout=sp.DEVNULL, stderr=sp.DEVNULL)
 
 
 # Demo
